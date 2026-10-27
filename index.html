@@ -66,7 +66,9 @@ header p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
 .group h2 {
   margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
 }
-.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.presets { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-block: 2px; margin-inline: -2px; padding-inline: 2px; }
+.presets::-webkit-scrollbar { display: none; }
+.presets > * { flex: none; }
 .preset {
   font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--line); background: transparent; color: var(--ink);
@@ -595,7 +597,13 @@ footer { font-size: 12.5px; color: var(--muted); max-width: 80ch; }
     add.title = "Новый шаблон";
     add.innerHTML = ICON_PLUS;
     add.addEventListener("click", () => openForm("new"));
-    box.appendChild(add);
+    box.insertBefore(add, box.firstChild);
+    const act = box.querySelector('[aria-pressed="true"]');
+    if (act) {
+      const r = act.getBoundingClientRect(), br = box.getBoundingClientRect();
+      if (r.left < br.left) box.scrollLeft -= br.left - r.left + 4;
+      else if (r.right > br.right) box.scrollLeft += r.right - br.right + 4;
+    }
 
     const t = activeTpl();
     const dirty = isDirty(t);
