@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Калькулятор досрочки</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,13 +43,12 @@
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { overscroll-behavior-y: none; }
 input[type="range"] { touch-action: pan-y; }
 body {
   background: var(--bg); color: var(--ink);
   font-family: var(--font-body); font-size: 15px; line-height: 1.5;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-left: 16px;
+  padding-right: 16px;
   padding-block: 28px 48px;
 }
 .wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 24px; }
@@ -72,6 +71,7 @@ header p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
   font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--line); background: transparent; color: var(--ink);
 }
+.preset { white-space: nowrap; }
 .preset:hover { border-color: var(--accent); }
 .preset[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
 .preset.dirty::after { content: " •"; }
