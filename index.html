@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Калькулятор досрочки</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* Layout: ledger-style tool — inputs column left, results right; stacks to one column on phones */
+:root {
+  --bg: #f6f4f4;
+  --surface: #ffffff;
+  --ink: #221a1d;
+  --muted: #6e6266;
+  --line: #e2dcdd;
+  --accent: #7a1f3d;          /* deep wine */
+  --accent-soft: #f1e3e8;
+  --area: rgba(122, 31, 61, 0.14);
+  --good: #2f6b4f;
+  --good-soft: #e3f0e8;
+  --warn: #9a5b00;
+  --warn-soft: #fbefdc;
+  --scrim: rgba(34, 26, 29, 0.45);
+  --font-display: "Unbounded", "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161214; --surface: #1f1a1c; --ink: #f1eaec; --muted: #a8999e; --line: #352d30;
+    --accent: #e48aa8; --accent-soft: #3a2029; --area: rgba(228, 138, 168, 0.16);
+    --good: #7fcaa3; --good-soft: #1d3127; --warn: #f0b45a; --warn-soft: #3a2c16; --scrim: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161214; --surface: #1f1a1c; --ink: #f1eaec; --muted: #a8999e; --line: #352d30;
+  --accent: #e48aa8; --accent-soft: #3a2029; --area: rgba(228, 138, 168, 0.16);
+  --good: #7fcaa3; --good-soft: #1d3127; --warn: #f0b45a; --warn-soft: #3a2c16; --scrim: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 24px; }
+header h1 {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(22px, 3.2vw, 30px);
+  letter-spacing: -0.01em; margin: 0; text-wrap: balance;
+}
+header p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 18px; min-width: 0; }
+.group { display: grid; gap: 12px; }
+.group > * { min-width: 0; }
+.group h2 {
+  margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.preset {
+  font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--ink);
+}
+.preset:hover { border-color: var(--accent); }
+.preset[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.preset.dirty::after { content: " •"; }
+.presets { align-items: center; }
+.preset.add { width: 34px; height: 34px; padding: 0; display: inline-grid; place-items: center; border-style: dashed; color: var(--accent); }
+.preset.add svg { width: 16px; height: 16px; }
+.tplbar { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 6px 6px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+.tplstate { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tplstate.dirty { color: var(--warn); font-weight: 600; }
+.iconbtn { flex: none; width: 34px; height: 34px; display: inline-grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; padding: 0; }
+.iconbtn svg { width: 17px; height: 17px; }
+.iconbtn:hover { border-color: var(--accent); }
+.iconbtn.danger { color: var(--warn); }
+.iconbtn.danger:hover { border-color: var(--warn); }
+.iconbtn.solid { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.iconbtn:focus-visible, .btn:focus-visible, .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tplform { display: flex; align-items: center; gap: 8px; }
+.tplform input { flex: 1; min-width: 0; }
+input[type="text"] { width: 100%; font: inherit; font-size: 16px; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--accent); background: var(--surface); color: var(--ink); }
+.link { font: inherit; font-size: 12.5px; background: none; border: 0; padding: 2px 0; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.btn { font: inherit; font-size: 14px; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: 1px solid transparent; background: var(--accent); color: var(--surface); cursor: pointer; }
+.btn.small { flex: none; font-size: 13px; padding: 6px 12px; }
+.btn.danger { background: var(--warn); }
+.btn.ghost { background: transparent; border-color: var(--line); color: var(--ink); }
+.modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: var(--scrim);
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.modal[hidden] { display: none; }
+.sheet { width: 100%; max-width: 380px; background: var(--surface); color: var(--ink); border-radius: 14px; padding: 20px; display: grid; gap: 10px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+.sheet h3 { margin: 0; font-size: 17px; }
+.sheet p { margin: 0; }
+.modalactions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+@media (max-width: 560px) {
+  .modal { align-items: flex-end; }
+  .sheet { max-width: none; border-radius: 16px 16px 12px 12px; }
+  .modalactions .btn { flex: 1; padding-block: 11px; }
+}
+.field { display: grid; gap: 4px; }
+.field label { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.field label .hint { font-family: var(--font-num); font-size: 12px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+input[type="number"], input[type="month"] {
+  width: 100%; font: inherit; font-family: var(--font-num); font-size: 15px;
+  padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink);
+}
+input:focus-visible, .preset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.note { font-size: 12.5px; color: var(--muted); margin: 0; }
+.flag { font-size: 13px; padding: 8px 10px; border-radius: 6px; background: var(--warn-soft); color: var(--warn); margin: 0; }
+
+.results { display: grid; gap: 20px; min-width: 0; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1000px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.kpi .k { font-size: 12px; color: var(--muted); }
+.kpi .v { font-family: var(--font-num); font-weight: 500; font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.kpi .s { font-size: 12.5px; color: var(--muted); }
+.kpi.hero { background: var(--accent-soft); border-color: transparent; }
+.kpi.hero .v { color: var(--accent); }
+.kpi.ok .v { color: var(--good); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 10px; min-width: 0; }
+.card h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+svg { display: block; width: 100%; height: auto; }
+svg text { fill: var(--muted); font-family: var(--font-num); font-size: 11px; }
+.compare { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .compare { grid-template-columns: minmax(0, 1fr); } }
+.compare div { display: grid; gap: 2px; }
+.compare .v { font-family: var(--font-num); font-size: 17px; font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--good-soft); color: var(--good); }
+
+.tablehead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.viewpick { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+select { font: inherit; font-size: 14px; padding: 6px 28px 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tablewrap { overflow-x: auto; }
+.tablewrap.tall { max-height: 560px; overflow-y: auto; }
+.tablewrap.tall thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 520px; }
+th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+td { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+tr.fixend td { border-bottom: 1px dashed var(--accent); }
+tr.comfort td:first-child::after { content: "≤ комфорт"; font-family: var(--font-body); font-size: 11px; margin-left: 8px; padding: 1px 6px; border-radius: 999px; background: var(--good-soft); color: var(--good); }
+footer { font-size: 12.5px; color: var(--muted); max-width: 80ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+(function () {
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if (!tg || !tg.initData) return; // opened outside Telegram
+  tg.ready();
+  tg.expand();
+  function applyTheme() { document.documentElement.setAttribute("data-theme", tg.colorScheme === "dark" ? "dark" : "light"); }
+  applyTheme();
+  tg.onEvent("themeChanged", applyTheme);
+  try { tg.setHeaderColor("secondary_bg_color"); } catch (e) {}
+})();
+</script>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Калькулятор досрочки</h1>
+    <p>Вводишь, сколько готов отдавать банку в месяц — калькулятор показывает, когда обязательный платёж опустится до комфортного и когда закроешь кредит. Платёж пересчитывается после каждой досрочки, срок в договоре не меняется.</p>
+  </header>
+
+  <div class="grid">
+    <form class="panel" id="form" autocomplete="off">
+      <div class="group">
+        <h2>Шаблон банка</h2>
+        <div class="presets" id="presets" role="group" aria-label="Шаблоны условий"></div>
+        <div class="tplform" id="tplForm" hidden>
+          <input type="text" id="tplName" maxlength="40" placeholder="Название шаблона" aria-label="Название шаблона">
+          <button type="button" class="iconbtn solid" id="tplOk" aria-label="Сохранить шаблон"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+          <button type="button" class="iconbtn" id="tplCancel" aria-label="Отмена"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <div class="tplbar" id="tplBar">
+          <span class="tplstate" id="tplState"></span>
+          <button type="button" class="btn small" id="tplSave" hidden>Сохранить</button>
+          <button type="button" class="iconbtn" id="tplRename" aria-label="Переименовать шаблон" title="Переименовать"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></button>
+          <button type="button" class="iconbtn danger" id="tplDelete" aria-label="Удалить шаблон" title="Удалить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+        </div>
+        <p class="note">Шаблон хранит ставки, срок и комиссию. Хранится в этом браузере. <button type="button" class="link" id="tplReset">Вернуть стандартные</button></p>
+      </div>
+
+      <div class="group">
+        <h2>Квартира и взнос</h2>
+        <div class="field">
+          <label for="price">Цена квартиры, €</label>
+          <input type="number" id="price" min="0" step="500" value="110000">
+        </div>
+        <div class="field">
+          <label for="down">Первоначальный взнос, € <span class="hint" id="downPct"></span></label>
+          <input type="number" id="down" min="0" step="500" value="22000">
+        </div>
+        <p class="note" id="loanLine"></p>
+        <p class="flag" id="downFlag" hidden></p>
+      </div>
+
+      <div class="group">
+        <h2>Ставка</h2>
+        <div class="row2">
+          <div class="field">
+            <label for="fixRate">Фикс, %</label>
+            <input type="number" id="fixRate" min="0" max="30" step="0.01" value="8.5">
+          </div>
+          <div class="field">
+            <label for="fixMonths">Фикс, мес</label>
+            <input type="number" id="fixMonths" min="0" max="360" step="1" value="48">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="floatRate">Потом плавающая, %</label>
+            <input type="number" id="floatRate" min="0" max="30" step="0.01" value="9.66">
+          </div>
+          <div class="field">
+            <label for="years">Срок, лет</label>
+            <input type="number" id="years" min="1" max="30" step="1" value="25">
+          </div>
+        </div>
+        <div class="field">
+          <label for="prepayFee">Комиссия за досрочку в фикс, %</label>
+          <input type="number" id="prepayFee" min="0" max="5" step="0.1" value="1">
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Твой бюджет</h2>
+        <div class="field">
+          <label for="total">Отдаю банку в месяц всего, € <span class="hint" id="totalHint"></span></label>
+          <input type="number" id="total" min="0" step="50" value="2000">
+          <input type="range" id="totalRange" min="0" max="6000" step="50" value="2000" aria-label="Сумма в месяц, ползунок">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="comfort">Комфортный платёж, €</label>
+            <input type="number" id="comfort" min="0" step="10" value="300">
+          </div>
+          <div class="field">
+            <label for="start">Первый платёж</label>
+            <input type="month" id="start" value="2026-12">
+          </div>
+        </div>
+        <p class="flag" id="totalFlag" hidden></p>
+      </div>
+    </form>
+
+    <section class="results" aria-live="polite">
+      <div class="kpis">
+        <div class="kpi"><span class="k">Обязательный платёж на старте</span><span class="v" id="kStart">—</span><span class="s" id="kStartS"></span></div>
+        <div class="kpi ok"><span class="k">Платёж станет комфортным</span><span class="v" id="kComfort">—</span><span class="s" id="kComfortS"></span></div>
+        <div class="kpi hero"><span class="k">Кредит закрыт</span><span class="v" id="kPayoff">—</span><span class="s" id="kPayoffS"></span></div>
+        <div class="kpi"><span class="k">Переплата всего</span><span class="v" id="kCost">—</span><span class="s" id="kCostS"></span></div>
+      </div>
+
+      <div class="card">
+        <h3>Остаток долга и обязательный платёж</h3>
+        <div class="legend">
+          <span><i style="background: var(--accent)"></i>Остаток долга</span>
+          <span><i style="background: var(--good)"></i>Обязательный платёж</span>
+          <span><i style="background: var(--muted)"></i>Конец фикса</span>
+        </div>
+        <svg id="chartBal" viewBox="0 0 680 200" role="img" aria-label="График остатка долга"></svg>
+        <svg id="chartPay" viewBox="0 0 680 150" role="img" aria-label="График обязательного платежа"></svg>
+      </div>
+
+      <div class="card">
+        <h3>Если платить только обязательный платёж</h3>
+        <div class="compare">
+          <div><span class="note">Срок</span><span class="v" id="cTerm">—</span></div>
+          <div><span class="note">Переплата</span><span class="v" id="cCost">—</span></div>
+          <div><span class="note">Досрочка экономит</span><span class="v" id="cSave">—</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="tablehead">
+          <h3>График платежей</h3>
+          <label class="viewpick" for="view">Показать
+            <select id="view">
+              <option value="year">по годам</option>
+              <option value="month">по месяцам</option>
+            </select>
+          </label>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th id="thPeriod">Год</th><th>Платёж в начале</th><th>Внесено</th><th>Проценты</th><th>Комиссии</th><th>Остаток на конец</th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <footer>Расчёт приблизительный: аннуитет, проценты помесячно, ставка после фикса считается неизменной. Комиссия за досрочку берётся из той же месячной суммы. Не учтены страховка, гарантия Prima Casă (~0,4% в год на гарантированную часть) и разовые расходы на оформление.</footer>
+    </section>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="sheet">
+    <h3 id="modalTitle"></h3>
+    <p class="note" id="modalText"></p>
+    <div class="modalactions">
+      <button type="button" class="btn ghost" id="modalNo">Отмена</button>
+      <button type="button" class="btn danger" id="modalYes">Удалить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const ids = ["price","down","fixRate","fixMonths","floatRate","years","prepayFee","total","comfort","start"];
+  const TPL_KEYS = ["fixRate", "fixMonths", "floatRate", "years", "prepayFee"];
+  const DEFAULT_TEMPLATES = [
+    { id: "famiglia",  name: "Eximbank Famiglia", fixRate: 8.5,  fixMonths: 48, floatRate: 9.66, years: 25, prepayFee: 1 },
+    { id: "primacasa", name: "Prima Casă",        fixRate: 8.66, fixMonths: 0,  floatRate: 8.66, years: 30, prepayFee: 0 },
+    { id: "victoria",  name: "Victoriabank IT",   fixRate: 8.25, fixMonths: 12, floatRate: 8.66, years: 30, prepayFee: 1 }
+  ];
+  const eur = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
+  const monthFmt = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" });
+  const monthShort = new Intl.DateTimeFormat("ru-RU", { month: "short", year: "numeric" });
+  function dateShort(startStr, m) {
+    const [y, mo] = (startStr || "2026-12").split("-").map(Number);
+    return monthShort.format(new Date(y || 2026, (mo || 12) - 1 + m, 1));
+  }
+  const fmtE = (v) => eur.format(Math.round(v)) + " €";
+  function plural(n, one, few, many) {
+    const a = Math.abs(n) % 100, b = a % 10;
+    if (a > 10 && a < 20) return many;
+    if (b === 1) return one;
+    if (b >= 2 && b <= 4) return few;
+    return many;
+  }
+  function dur(m) {
+    const y = Math.floor(m / 12), mo = m % 12;
+    const parts = [];
+    if (y) parts.push(y + " " + plural(y, "год", "года", "лет"));
+    if (mo || !y) parts.push(mo + " мес");
+    return parts.join(" ");
+  }
+  function dateAt(startStr, m) {
+    const [y, mo] = (startStr || "2026-12").split("-").map(Number);
+    const d = new Date(y || 2026, (mo || 12) - 1 + m, 1);
+    return monthFmt.format(d);
+  }
+  function annuity(B, r, n) {
+    if (n <= 0) return B;
+    if (r === 0) return B / n;
+    return B * r / (1 - Math.pow(1 + r, -n));
+  }
+  function num(id) { const v = parseFloat($(id).value); return isFinite(v) ? v : 0; }
+
+  function simulate(p, prepay) {
+    const L = Math.max(0, p.price - p.down);
+    const N = Math.max(1, Math.round(p.years * 12));
+    let B = L, m = 0, interestSum = 0, feeSum = 0, comfortM = null, firstReq = 0;
+    const s = [];
+    while (B > 0.005 && m < N) {
+      const inFix = m < p.fixMonths;
+      const r = (inFix ? p.fixRate : p.floatRate) / 100 / 12;
+      const req = annuity(B, r, N - m);
+      if (m === 0) firstReq = req;
+      if (comfortM === null && req <= p.comfort) comfortM = m;
+      const interest = B * r;
+      const due = Math.min(req, B + interest);
+      let extra = 0, fee = 0;
+      if (prepay) {
+        const avail = Math.max(0, p.total - due);
+        const feePct = inFix ? p.prepayFee / 100 : 0;
+        extra = Math.min(B + interest - due, avail / (1 + feePct));
+        extra = Math.max(0, extra);
+        fee = extra * feePct;
+      }
+      B = B + interest - due - extra;
+      if (B < 0.005) B = 0;
+      interestSum += interest; feeSum += fee;
+      s.push({ m, req, interest, fee, paid: due + extra + fee, B });
+      m++;
+    }
+    return { L, N, months: m, interestSum, feeSum, comfortM, firstReq, s };
+  }
+
+  function linePath(pts) { return pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" "); }
+  function niceMax(v) {
+    if (v <= 0) return 1;
+    const e = Math.pow(10, Math.floor(Math.log10(v)));
+    const f = v / e;
+    const n = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+    return n * e;
+  }
+  function drawChart(svg, H, series, key, maxV, opts) {
+    const W = 680, padL = 54, padR = 12, padT = 10, padB = 24;
+    const iw = W - padL - padR, ih = H - padT - padB;
+    const n = Math.max(series.length, 1);
+    const xMax = Math.max(n, 12);
+    const x = (m) => padL + (m / xMax) * iw;
+    const y = (v) => padT + ih - (v / maxV) * ih;
+    let out = "";
+    for (let i = 0; i <= 4; i++) {
+      const v = (maxV / 4) * i, yy = y(v);
+      out += `<line x1="${padL}" x2="${W - padR}" y1="${yy}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`;
+      out += `<text x="${padL - 8}" y="${yy + 4}" text-anchor="end">${eur.format(Math.round(v))}</text>`;
+    }
+    const yearsTotal = xMax / 12;
+    const stepY = yearsTotal > 10 ? 5 : yearsTotal > 5 ? 2 : 1;
+    for (let yr = 0; yr * 12 <= xMax; yr += stepY) {
+      const xx = x(yr * 12);
+      out += `<text x="${xx}" y="${H - 6}" text-anchor="middle">${yr} г</text>`;
+    }
+    if (opts.fixEnd > 0 && opts.fixEnd < xMax) {
+      const xx = x(opts.fixEnd);
+      out += `<line x1="${xx}" x2="${xx}" y1="${padT}" y2="${padT + ih}" stroke="var(--muted)" stroke-dasharray="3 4" stroke-width="1"/>`;
+    }
+    if (opts.threshold != null && opts.threshold < maxV) {
+      const yy = y(opts.threshold);
+      out += `<line x1="${padL}" x2="${W - padR}" y1="${yy}" y2="${yy}" stroke="var(--good)" stroke-dasharray="5 4" stroke-width="1"/>`;
+      out += `<text x="${W - padR}" y="${yy - 5}" text-anchor="end" style="fill: var(--good)">комфорт ${eur.format(opts.threshold)} €</text>`;
+    }
+    const pts = key === "req"
+      ? series.map((d) => [x(d.m), y(d.req)])
+      : [[x(0), y(opts.startVal)]].concat(series.map((d) => [x(d.m + 1), y(d[key])]));
+    if (opts.area) {
+      out += `<path d="${linePath(pts)} L ${pts[pts.length - 1][0].toFixed(1)} ${y(0)} L ${x(0)} ${y(0)} Z" fill="var(--area)" stroke="none"/>`;
+    }
+    out += `<path d="${linePath(pts)}" fill="none" stroke="${opts.color}" stroke-width="2" stroke-linejoin="round"/>`;
+    const last = pts[pts.length - 1];
+    out += `<circle cx="${last[0]}" cy="${last[1]}" r="3.5" fill="${opts.color}"/>`;
+    svg.innerHTML = out;
+  }
+
+  function read() {
+    const p = {};
+    ids.forEach((id) => { p[id] = id === "start" ? $(id).value : num(id); });
+    p.fixMonths = Math.max(0, Math.round(p.fixMonths));
+    return p;
+  }
+
+  function render() {
+    const p = read();
+    const L = Math.max(0, p.price - p.down);
+    const pct = p.price > 0 ? (p.down / p.price) * 100 : 0;
+    $("downPct").textContent = pct.toFixed(0) + "%";
+    $("loanLine").textContent = "Кредит: " + fmtE(L) + (p.price > 0 ? " · " + (L / p.price * 100).toFixed(0) + "% от цены" : "");
+    const downFlag = $("downFlag");
+    if (p.price > 0 && pct < 20 && p.fixMonths > 0) {
+      downFlag.hidden = false;
+      downFlag.textContent = "В Famiglia минимальный взнос — 20% цены (" + fmtE(p.price * 0.2) + ").";
+    } else downFlag.hidden = true;
+
+    const withPre = simulate(p, true);
+    const base = simulate(p, false);
+    if (!withPre.s.length) {
+      ["kStart","kComfort","kPayoff","kCost"].forEach((k) => $(k).textContent = "—");
+      $("tbody").innerHTML = ""; $("chartBal").innerHTML = ""; $("chartPay").innerHTML = "";
+      return;
+    }
+    $("totalHint").textContent = "досрочка ≈ " + fmtE(Math.max(0, p.total - withPre.firstReq));
+    const tf = $("totalFlag");
+    if (p.total < withPre.firstReq) {
+      tf.hidden = false;
+      tf.textContent = "Сумма меньше обязательного платежа (" + fmtE(withPre.firstReq) + "). Считаю как обычный график без досрочки.";
+    } else tf.hidden = true;
+
+    $("kStart").textContent = fmtE(withPre.firstReq);
+    $("kStartS").textContent = "ставка " + (p.fixMonths > 0 ? p.fixRate : p.floatRate) + "%, " + p.years + " " + plural(p.years, "год", "года", "лет");
+    if (withPre.comfortM !== null) {
+      $("kComfort").textContent = withPre.comfortM === 0 ? "сразу" : dur(withPre.comfortM);
+      $("kComfortS").textContent = "≤ " + fmtE(p.comfort) + " с " + dateAt(p.start, withPre.comfortM);
+    } else {
+      $("kComfort").textContent = "не дойдёт";
+      $("kComfortS").textContent = "увеличь сумму в месяц";
+    }
+    $("kPayoff").textContent = dur(withPre.months);
+    $("kPayoffS").textContent = "последний платёж — " + dateAt(p.start, withPre.months - 1);
+    $("kCost").textContent = fmtE(withPre.interestSum + withPre.feeSum);
+    $("kCostS").textContent = "проценты " + fmtE(withPre.interestSum) + " · комиссии " + fmtE(withPre.feeSum);
+
+    $("cTerm").textContent = dur(base.months);
+    $("cCost").textContent = fmtE(base.interestSum);
+    const saved = base.interestSum - (withPre.interestSum + withPre.feeSum);
+    $("cSave").innerHTML = saved > 0 ? '<span class="pill">' + fmtE(saved) + "</span>" : fmtE(0);
+
+    drawChart($("chartBal"), 200, withPre.s, "B", niceMax(L), { startVal: L, area: true, color: "var(--accent)", fixEnd: p.fixMonths });
+    const maxReq = Math.max(withPre.firstReq, p.comfort * 1.1);
+    drawChart($("chartPay"), 150, withPre.s, "req", niceMax(maxReq), { startVal: withPre.firstReq, color: "var(--good)", fixEnd: p.fixMonths, threshold: p.comfort });
+
+    let rows = "";
+    const s = withPre.s;
+    const byMonth = $("view").value === "month";
+    $("thPeriod").textContent = byMonth ? "Месяц" : "Год";
+    document.querySelector(".tablewrap").classList.toggle("tall", byMonth);
+    document.querySelector("thead tr").children[1].textContent = byMonth ? "Обязательный платёж" : "Платёж в начале";
+    if (byMonth) {
+      s.forEach((d) => {
+        const cls = [];
+        if (p.fixMonths > 0 && d.m === p.fixMonths - 1 && p.fixMonths < s.length) cls.push("fixend");
+        if (withPre.comfortM === d.m) cls.push("comfort");
+        rows += `<tr class="${cls.join(" ")}"><td>${d.m + 1}. ${dateShort(p.start, d.m)}</td><td>${fmtE(d.req)}</td><td>${fmtE(d.paid)}</td><td>${fmtE(d.interest)}</td><td>${fmtE(d.fee)}</td><td>${fmtE(d.B)}</td></tr>`;
+      });
+    }
+    for (let y = 0; !byMonth && y * 12 < s.length; y++) {
+      const slice = s.slice(y * 12, y * 12 + 12);
+      const sum = (k) => slice.reduce((a, d) => a + d[k], 0);
+      const lastM = slice[slice.length - 1].m;
+      const cls = [];
+      if (p.fixMonths > 0 && p.fixMonths - 1 >= y * 12 && p.fixMonths - 1 <= lastM && p.fixMonths < s.length) cls.push("fixend");
+      if (withPre.comfortM !== null && withPre.comfortM >= y * 12 && withPre.comfortM <= lastM) cls.push("comfort");
+      rows += `<tr class="${cls.join(" ")}"><td>${y + 1}-й</td><td>${fmtE(slice[0].req)}</td><td>${fmtE(sum("paid"))}</td><td>${fmtE(sum("interest"))}</td><td>${fmtE(sum("fee"))}</td><td>${fmtE(slice[slice.length - 1].B)}</td></tr>`;
+    }
+    $("tbody").innerHTML = rows;
+    save();
+  }
+
+  function save() {
+    try { const o = {}; ids.forEach((id) => o[id] = $(id).value); localStorage.setItem("mortgage-calc", JSON.stringify(o)); } catch (e) {}
+  }
+  function load() {
+    try {
+      const o = JSON.parse(localStorage.getItem("mortgage-calc") || "null");
+      if (o) ids.forEach((id) => { if (o[id] != null && o[id] !== "") $(id).value = o[id]; });
+    } catch (e) {}
+    $("totalRange").value = $("total").value;
+  }
+  /* ---------- templates (stored in this browser) ---------- */
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  let templates = clone(DEFAULT_TEMPLATES);
+  let activeId = "famiglia";
+  let formMode = null;     // "new" | "rename"
+  let confirmMode = null;  // "delete" | "reset"
+  try {
+    const t = JSON.parse(localStorage.getItem("mortgage-calc-templates") || "null");
+    if (Array.isArray(t)) templates = t.filter((x) => x && x.id && x.name);
+    const a = localStorage.getItem("mortgage-calc-active");
+    if (a !== null) activeId = a;
+  } catch (e) {}
+  if (!templates.some((t) => t.id === activeId)) activeId = null;
+
+  function storeTemplates() {
+    try {
+      localStorage.setItem("mortgage-calc-templates", JSON.stringify(templates));
+      localStorage.setItem("mortgage-calc-active", activeId || "");
+    } catch (e) {}
+  }
+  const activeTpl = () => templates.find((t) => t.id === activeId) || null;
+  const isDirty = (t) => !!t && TPL_KEYS.some((k) => Math.abs(num(k) - Number(t[k])) > 1e-9);
+
+  const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+  function renderPresets() {
+    const box = $("presets");
+    box.innerHTML = "";
+    templates.forEach((t) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "preset";
+      b.textContent = t.name;
+      const on = t.id === activeId;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      if (on && isDirty(t)) b.classList.add("dirty");
+      b.addEventListener("click", () => applyTemplate(t.id));
+      box.appendChild(b);
+    });
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "preset add";
+    add.setAttribute("aria-label", "Новый шаблон из текущих значений");
+    add.title = "Новый шаблон";
+    add.innerHTML = ICON_PLUS;
+    add.addEventListener("click", () => openForm("new"));
+    box.appendChild(add);
+
+    const t = activeTpl();
+    const dirty = isDirty(t);
+    $("tplBar").hidden = !t || formMode !== null;
+    $("tplSave").hidden = !dirty;
+    $("tplState").textContent = t ? (dirty ? "Изменено" : "«" + t.name + "»") : "";
+    $("tplState").classList.toggle("dirty", dirty);
+  }
+  function applyTemplate(id) {
+    const t = templates.find((x) => x.id === id);
+    if (!t) return;
+    TPL_KEYS.forEach((k) => $(k).value = t[k]);
+    activeId = id;
+    closeForm();
+    storeTemplates(); renderPresets(); render();
+  }
+  function currentValues() {
+    const o = {};
+    TPL_KEYS.forEach((k) => o[k] = num(k));
+    return o;
+  }
+  function closeForm() {
+    $("tplForm").hidden = true;
+    formMode = null;
+    renderPresets();
+  }
+  function openForm(mode) {
+    formMode = mode;
+    const t = activeTpl();
+    $("tplName").value = mode === "rename" && t ? t.name : "";
+    $("tplName").placeholder = mode === "new" ? "Название нового шаблона" : "Новое название";
+    $("tplForm").hidden = false;
+    renderPresets();
+    $("tplName").focus();
+  }
+  function submitForm() {
+    const name = $("tplName").value.trim();
+    if (formMode === "new") {
+      const t = Object.assign({ id: "t" + Date.now(), name: name || "Мой шаблон" }, currentValues());
+      templates.push(t);
+      activeId = t.id;
+    } else if (formMode === "rename") {
+      const t = activeTpl();
+      if (t && name) t.name = name;
+    }
+    storeTemplates(); closeForm();
+  }
+
+  let modalAction = null, lastFocus = null;
+  function openModal(title, text, yesLabel, action) {
+    $("modalTitle").textContent = title;
+    $("modalText").textContent = text;
+    $("modalYes").textContent = yesLabel;
+    modalAction = action;
+    lastFocus = document.activeElement;
+    $("modal").hidden = false;
+    $("modalNo").focus();
+  }
+  function closeModal() {
+    $("modal").hidden = true;
+    modalAction = null;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  $("modalNo").addEventListener("click", closeModal);
+  $("modalYes").addEventListener("click", () => { const a = modalAction; closeModal(); if (a) a(); });
+  $("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("modal").hidden) closeModal(); });
+
+  $("tplRename").addEventListener("click", () => openForm("rename"));
+  $("tplDelete").addEventListener("click", () => {
+    const t = activeTpl();
+    if (!t) return;
+    openModal("Удалить шаблон?", "Шаблон «" + t.name + "» удалится из этого браузера. Значения в полях останутся.", "Удалить", () => {
+      templates = templates.filter((x) => x.id !== t.id);
+      activeId = null;
+      storeTemplates(); renderPresets();
+    });
+  });
+  $("tplReset").addEventListener("click", () => {
+    openModal("Вернуть стандартные шаблоны?", "Останутся только Famiglia, Prima Casă и Victoriabank IT. Твои шаблоны и изменения в них удалятся.", "Вернуть", () => {
+      templates = clone(DEFAULT_TEMPLATES);
+      storeTemplates();
+      applyTemplate("famiglia");
+    });
+  });
+  $("tplOk").addEventListener("click", submitForm);
+  $("tplCancel").addEventListener("click", closeForm);
+  $("tplName").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); submitForm(); }
+    if (e.key === "Escape") closeForm();
+  });
+  $("tplSave").addEventListener("click", () => {
+    const t = activeTpl();
+    if (!t) return;
+    Object.assign(t, currentValues());
+    storeTemplates(); renderPresets();
+  });
+
+  $("form").addEventListener("input", (e) => {
+    if (e.target.id === "tplName") return;
+    if (e.target.id === "totalRange") $("total").value = e.target.value;
+    if (e.target.id === "total") $("totalRange").value = e.target.value;
+    renderPresets(); render();
+  });
+  $("form").addEventListener("submit", (e) => e.preventDefault());
+  $("view").addEventListener("change", () => {
+    try { localStorage.setItem("mortgage-calc-view", $("view").value); } catch (e) {}
+    render();
+  });
+  try { const v = localStorage.getItem("mortgage-calc-view"); if (v === "month" || v === "year") $("view").value = v; } catch (e) {}
+
+  load(); renderPresets(); render();
+})();
+</script>
+
+</body>
+</html>
