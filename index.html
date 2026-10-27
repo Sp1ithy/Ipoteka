@@ -43,6 +43,8 @@
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+html, body { overscroll-behavior-y: none; }
+input[type="range"] { touch-action: pan-y; }
 body {
   background: var(--bg); color: var(--ink);
   font-family: var(--font-body); font-size: 15px; line-height: 1.5;
@@ -149,7 +151,12 @@ select { font: inherit; font-size: 14px; padding: 6px 28px 6px 10px; border-radi
 select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tablewrap { overflow-x: auto; }
 .tablewrap.tall { max-height: 560px; overflow-y: auto; }
+.tablewrap.tall { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .tablewrap.tall thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+@media (max-width: 560px), (pointer: coarse) {
+  .tablewrap.tall { max-height: none; overflow-y: visible; }
+  .tablewrap.tall thead th { position: static; }
+}
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 520px; }
 th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; }
@@ -164,9 +171,11 @@ footer { font-size: 12.5px; color: var(--muted); max-width: 80ch; }
 <script>
 (function () {
   var tg = window.Telegram && window.Telegram.WebApp;
-  if (!tg || !tg.initData) return; // opened outside Telegram
+  if (!tg || !tg.initData) return; // opened outside Telegram Mini App
   tg.ready();
   tg.expand();
+  // Stop Telegram's swipe-down-to-close gesture from fighting with page scroll
+  try { if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); } catch (e) {}
   function applyTheme() { document.documentElement.setAttribute("data-theme", tg.colorScheme === "dark" ? "dark" : "light"); }
   applyTheme();
   tg.onEvent("themeChanged", applyTheme);
